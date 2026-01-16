@@ -2,5 +2,18 @@
 name = "rust-uaf"
 version = "0.1.0"
 edition = "2021"
+description = "Educational demo: how unsafe code can corrupt memory and break safe code"
+readme = "README.md"
 
 [dependencies]
+
+# Disable optimizations to ensure memory corruption is visible.
+# With optimizations enabled, the compiler may:
+# - Keep variables in registers (never reading corrupted memory)
+# - Reorder or eliminate code based on "impossible" UB
+# - Produce unpredictable results that obscure the lesson
+[profile.dev]
+opt-level = 0
+
+[profile.release]
+opt-level = 0
