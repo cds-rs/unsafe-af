@@ -40,7 +40,7 @@ mod color {
     /// Format a byte that changed this iteration (red / [bracketed])
     pub fn red(byte: u8) -> String {
         if use_ansi() {
-            format!("\x1b[91m{byte:02x}\x1b[0m")
+            format!(" \x1b[91m{byte:02x}\x1b[0m ")
         } else {
             format!("[{byte:02x}]")
         }
@@ -49,7 +49,7 @@ mod color {
     /// Format a watched byte that hasn't been corrupted yet (green / (parens))
     pub fn green(byte: u8) -> String {
         if use_ansi() {
-            format!("\x1b[92m{byte:02x}\x1b[0m")
+            format!(" \x1b[92m{byte:02x}\x1b[0m ")
         } else {
             format!("({byte:02x})")
         }
