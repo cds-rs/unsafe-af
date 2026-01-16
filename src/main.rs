@@ -1,104 +1,132 @@
-/// Demonstrating buffer overflow in unsafe Rust
-/// This shows why Rust's safety guarantees matter
+const USE_ANSI: bool = false; // set true for terminal, false for playground
 
-// No repr(C) - Rust chooses the layout!
-#[derive(Debug)]
-struct State {
-    buffer: [u8; 5],
-    secret: u8,
-}
+mod color {
+    use super::USE_ANSI;
 
-// With repr(C) for comparison
-#[repr(C)]
-#[derive(Debug)]
-struct StateC {
-    buffer: [u8; 5],
-    secret: u8,
-}
-
-// Struct where Rust is MORE likely to reorder
-#[derive(Debug)]
-struct Reorderable {
-    a: u8,       // 1 byte
-    b: u64,      // 8 bytes (wants 8-byte alignment)
-    c: u8,       // 1 byte
-    d: u32,      // 4 bytes (wants 4-byte alignment)
-}
-
-#[repr(C)]
-#[derive(Debug)]
-struct ReorderableC {
-    a: u8,
-    b: u64,
-    c: u8,
-    d: u32,
-}
-
-impl State {
-    pub fn new() -> Self {
-        Self {
-            buffer: [0u8; 5],
-            secret: 42,
+    pub fn red(byte: u8) -> String {
+        if USE_ANSI {
+            format!("\x1b[91m{byte:02x}\x1b[0m")
+        } else {
+            format!("[{byte:02x}]") // brackets for changed
         }
     }
+
+    pub fn green(byte: u8) -> String {
+        if USE_ANSI {
+            format!("\x1b[92m{byte:02x}\x1b[0m")
+        } else {
+            format!("({byte:02x})") // parens for watched
+        }
+    }
+
+    pub fn plain(byte: u8) -> String {
+        format!(" {byte:02x} ")
+    }
+}
+
+const VIEW_SIZE: usize = 16;
+const BUFFER_SIZE: usize = 5;
+const NUM_SIZE: usize = std::mem::size_of::<i32>();
+
+struct MemoryView {
+    snapshot: [u8; VIEW_SIZE],
+    corrupted: [bool; VIEW_SIZE],
+    num_offset: usize,
+}
+
+impl MemoryView {
+    fn new(buffer_ptr: *const u8, num_ptr: *const i32) -> Self {
+        let offset = (num_ptr as usize).wrapping_sub(buffer_ptr as usize);
+        Self {
+            snapshot: [0u8; VIEW_SIZE],
+            corrupted: [false; VIEW_SIZE],
+            num_offset: offset,
+        }
+    }
+
+    fn capture(&mut self, ptr: *const u8) {
+        unsafe {
+            std::ptr::copy_nonoverlapping(ptr, self.snapshot.as_mut_ptr(), VIEW_SIZE);
+        }
+    }
+
+    fn is_separator(&self, i: usize) -> bool {
+        i == BUFFER_SIZE || i == self.num_offset
+    }
+
+    fn is_watched(&self, i: usize) -> bool {
+        i >= self.num_offset && i < self.num_offset + NUM_SIZE
+    }
+
+    fn print_byte(&self, i: usize, byte: u8, changed: bool) {
+        if self.is_separator(i) {
+            print!(" |");
+        }
+
+        let formatted = if changed {
+            color::red(byte)
+        } else if self.is_watched(i) && !self.corrupted[i] {
+            color::green(byte)
+        } else {
+            color::plain(byte)
+        };
+        print!("{formatted}");
+    }
+
+    fn print_row(&self, label: &str) {
+        print!("{label} |");
+        for (i, &byte) in self.snapshot.iter().enumerate() {
+            self.print_byte(i, byte, false);
+        }
+        println!();
+    }
+
+    fn print_diff(&mut self, prev: &[u8; VIEW_SIZE], iter: usize) {
+        print!("i={iter:<2} |");
+        for (i, (&p, &c)) in prev.iter().zip(self.snapshot.iter()).enumerate() {
+            self.print_byte(i, c, p != c);
+        }
+        println!();
+
+        for i in 0..VIEW_SIZE {
+            if prev[i] != self.snapshot[i] {
+                self.corrupted[i] = true;
+            }
+        }
+    }
+}
+
+fn test(end: usize) {
+    let mut buffer: [u8; BUFFER_SIZE] = [0u8; BUFFER_SIZE];
+    let num_above_buffer: i32 = 40_000;
+    let ptr: *mut u8 = &raw mut buffer[0];
+    let num_ptr: *const i32 = &raw const num_above_buffer;
+
+    let mut view = MemoryView::new(ptr, num_ptr);
+    view.capture(ptr);
+
+    println!("\n=== 0..{end} === (num_above_buffer at offset {}) ===", view.num_offset);
+    println!("     | buffer           | ...      | num_above_buffer (i32)");
+    println!("-----+------------------+----------+------------------------");
+    view.print_row("init");
+
+    let mut prev_snapshot = view.snapshot;
+
+    unsafe {
+        for i in 0..end {
+            *ptr.add(i) = i as u8;
+            view.capture(ptr);
+            view.print_diff(&prev_snapshot, i);
+            prev_snapshot = view.snapshot;
+        }
+    }
+
+    println!("\nbuffer: {:?}", buffer);
+    println!("num_above_buffer: {} (0x{:08x})\n", num_above_buffer, num_above_buffer);
 }
 
 fn main() {
-    let vec: Vec<u32> = vec![1,2,3];
-    println!("{vec:?}");
-    println!("=== Memory Layout Comparison ===\n");
-
-    // Show sizes
-    println!("State (no repr):     size={}, align={}",
-        std::mem::size_of::<State>(), std::mem::align_of::<State>());
-    println!("StateC (repr(C)):    size={}, align={}",
-        std::mem::size_of::<StateC>(), std::mem::align_of::<StateC>());
-
-    println!("\nReorderable (no repr):  size={}, align={}",
-        std::mem::size_of::<Reorderable>(), std::mem::align_of::<Reorderable>());
-    println!("ReorderableC (repr(C)): size={}, align={}",
-        std::mem::size_of::<ReorderableC>(), std::mem::align_of::<ReorderableC>());
-
-    // Show field offsets
-    println!("\n=== Field Offsets ===\n");
-
-    println!("Reorderable (Rust default layout):");
-    println!("  offset of a (u8):  {}", std::mem::offset_of!(Reorderable, a));
-    println!("  offset of b (u64): {}", std::mem::offset_of!(Reorderable, b));
-    println!("  offset of c (u8):  {}", std::mem::offset_of!(Reorderable, c));
-    println!("  offset of d (u32): {}", std::mem::offset_of!(Reorderable, d));
-
-    println!("\nReorderableC (repr(C) - declaration order):");
-    println!("  offset of a (u8):  {}", std::mem::offset_of!(ReorderableC, a));
-    println!("  offset of b (u64): {}", std::mem::offset_of!(ReorderableC, b));
-    println!("  offset of c (u8):  {}", std::mem::offset_of!(ReorderableC, c));
-    println!("  offset of d (u32): {}", std::mem::offset_of!(ReorderableC, d));
-
-    // Now show the overflow behavior difference
-    println!("\n=== Buffer Overflow With vs Without repr(C) ===\n");
-
-    let mut state = State::new();
-    let mut state_c = StateC { buffer: [0u8; 5], secret: 42 };
-
-    println!("Before overflow:");
-    println!("  State:  buffer={:?}, secret={}", state.buffer, state.secret);
-    println!("  StateC: buffer={:?}, secret={}", state_c.buffer, state_c.secret);
-
-    unsafe {
-        // Overflow both by writing 6 bytes
-        let ptr = state.buffer.as_mut_ptr();
-        let ptr_c = state_c.buffer.as_mut_ptr();
-
-        for i in 0..6 {
-            *ptr.add(i) = 0xFF;
-            *ptr_c.add(i) = 0xFF;
-        }
+    for e in 6..=10 {
+        test(e);
     }
-
-    println!("\nAfter writing 6 bytes (1 byte overflow):");
-    println!("  State:  buffer={:?}, secret={}", state.buffer, state.secret);
-    println!("  StateC: buffer={:?}, secret={}", state_c.buffer, state_c.secret);
-
-    println!("\nNote: Without repr(C), the overflow might corrupt something else,");
-    println!("      or 'secret' might be placed BEFORE buffer in memory!");
 }
