@@ -49,7 +49,7 @@ Here's a fun paradox: our "memory snapshot" function was reading 16 bytes from a
 
 The compiler is within its rights to assume UB never happens. So our snapshot could contain anything. Stale values. Garbage. The lyrics to a song the compiler likes. The output is "not something Rust promises to be meaningful or repeatable," as ChatGPT put it.
 
-We wanted to observe memory corruption, but our observation method was itself corrupted. It's like trying to measure voltage with a multimeter whose probes are also on fire.
+We wanted to observe memory corruption, but our observation method was itself undefined behavior, like taking measurements with a ruler whose markings change every time you look at it.
 
 ### Problem 2: Stack layout is a polite fiction
 
