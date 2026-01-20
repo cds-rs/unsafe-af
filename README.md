@@ -188,6 +188,14 @@ This is also why the demo uses `read_volatile`: belt and suspenders.
 - **UB is not deterministic**: our demo is carefully constructed; real UB can do anything
 - **This isn't a fuzzer**: we're corrupting known offsets, not discovering vulnerabilities
 
+## The formal model
+
+For those who prefer their intuition backed by math: [docs/mental-model.pdf](docs/mental-model.pdf) frames undefined behavior as a domain restriction on the compiler function.
+
+The short version: the compiler is a partial function from "programs where no execution triggers UB" to "executables." Programs with reachable UB are outside the domain—not wrong outputs, but *non-inputs*. The compiler assumes you gave it a valid input; if you didn't, all bets are off.
+
+Source: [docs/mental-model.typ](docs/mental-model.typ)
+
 ## Further reading
 
 - [The Rustonomicon](https://doc.rust-lang.org/nomicon/): Rust's official guide to dark magic
