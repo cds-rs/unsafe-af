@@ -78,23 +78,49 @@ This holds even if cond is “always false in practice”.
 
 == Diagram (Mental Model)
 
-```
-P  (syntactically valid programs)
-┌────────────────────────────────────┐
-│                                    │
-│   S  (all executions UB-free)      │
-│   ┌────────────────────────────┐   │
-│   │                            │   │
-│   │   compile : S -> C         │   │
-│   │                            │   │
-│   └────────────────────────────┘   │
-│                                    │
-│   U = P - S  (reachable UB)        │
-│   - outside compiler contract      │
-│   - no semantic guarantees         │
-│                                    │
-└────────────────────────────────────┘
-```
+#align(center)[
+  #block(stroke: 1pt, inset: 0pt)[
+    #block(inset: 6pt, width: 100%, fill: luma(240))[
+      #align(center)[*P* — all syntactically valid Rust programs]
+    ]
+    #grid(
+      columns: (1fr, 1fr),
+      block(
+        fill: rgb(220, 245, 220),
+        stroke: (right: 1pt),
+        inset: 12pt,
+        height: 6em,
+        width: 100%,
+      )[
+        #align(center)[
+          *S* \
+          #text(size: 9pt)[no execution triggers UB] \
+          #v(0.5em)
+          $"compile": S -> C$ #text(fill: green)[✓]
+        ]
+      ],
+      block(
+        fill: rgb(255, 230, 230),
+        inset: 12pt,
+        height: 6em,
+        width: 100%,
+      )[
+        #align(center)[
+          *P \\ S* \
+          #text(size: 9pt)[reachable UB exists] \
+          #v(0.5em)
+          #text(fill: red)[undefined ✗]
+        ]
+      ],
+    )
+  ]
+  #v(0.3em)
+  #text(size: 18pt)[↓] #h(1em) #text(size: 9pt)[(only from S)]
+  #v(0.3em)
+  #block(stroke: 1pt, inset: 10pt, fill: rgb(230, 240, 255))[
+    *C* — well-defined executables
+  ]
+]
 
 Only programs inside $S$ are valid inputs to the compiler-as-a-function.
 
